@@ -1,112 +1,67 @@
+from bokeh.plotting import figure, show
+from bokeh.transform import linear_cmap
+from bokeh.palettes import RdBu
+from bokeh.models import ColumnDataSource, HoverTool, WheelZoomTool, PanTool
 import numpy as np
+from bokeh.models import ColorBar, LinearColorMapper
+from bokeh.layouts import column
 
-# def convolution_3d(input, kernel, bias):
-#     input_shape = input.shape
-#     kernel_shape = kernel.shape
-#     output_shape = (
-#     input_shape[0] - kernel_shape[0] + 1, input_shape[1] - kernel_shape[1] + 1, input_shape[2] - kernel_shape[2] + 1)
-#
-#     print("Input Tensor Shape:", input_shape)
-#     print("Kernel Tensor Shape:", kernel_shape)
-#     print("Output Tensor Shape:", output_shape)
-#     output_tensor = np.zeros(output_shape)
-#
-#     for k in range(output_shape[2]):
-#         for i in range(output_shape[0]):
-#             for j in range(output_shape[1]):
-#                 # output_value = np.sum(input[i:i + kernel_shape[0], j:j + kernel_shape[1], k] * kernel[:, :, k])
-#
-#                 # output_tensor[i, j, k] = output_value
-#                 # Extract the corresponding input slice
-#                 input_slice = input[i:i + kernel_shape[0], j:j + kernel_shape[1], k:k + kernel_shape[2]]
-#                 # Perform element-wise multiplication with the kernel
-#                 element_wise_product = input_slice * kernel
-#                 # Calculate the sum of the products
-#                 output_value = np.sum(element_wise_product)
-#                 print(f"i: {i}, j: {j}, k: {k}")
-#                 output_tensor[i, j, k] = output_value
-#
-#     output_tensor += bias  # Add the bias to all elements of the output tensor
-#
-#     return output_tensor
-
+from bokeh.plotting import figure, show
+from bokeh.transform import linear_cmap
+from bokeh.palettes import RdBu
+from bokeh.models import ColumnDataSource, HoverTool, WheelZoomTool, PanTool
 import numpy as np
+from bokeh.models import ColorBar, LinearColorMapper
+from bokeh.layouts import column
 
-def convolution_3d(input, kernels, bias):
-    input_shape = input.shape
-    num_kernels, kernel_depth, kernel_height, kernel_width = kernels.shape
-    output_shape = (
-        input_shape[0] - kernel_depth + 1,
-        input_shape[1] - kernel_height + 1,
-        input_shape[2] - kernel_width + 1,
-        num_kernels
-    )
+def create_heatmap_with_legend(data, title="Heatmap with Legend", additional_info=None):
+    # 确定输入张量的维度
+    rows, cols = data.shape
 
-    print("Input Tensor Shape:", input_shape)
-    print("Kernels Tensor Shape:", kernels.shape)
-    print("Output Tensor Shape:", output_shape)
-    output_tensor = np.zeros(output_shape)
+    # 根据数据中的最小值和最大值创建颜色映射
+    low, high = np.min(data), np.max(data)
+    mapper = linear_cmap(field_name='values', palette=RdBu[9], low=low, high=high)
 
-    for k in range(num_kernels):
-        for z in range(output_shape[3]):  # Depth dimension
-            for i in range(output_shape[0]):  # Height dimension
-                for j in range(output_shape[1]):  # Width dimension
-                    # Extract the corresponding input slice
-                    input_slice = input[i:i + kernel_depth, j:j + kernel_height, z:z + kernel_width]
-                    # Perform element-wise multiplication with the kernel
-                    element_wise_product = input_slice * kernels[k]
-                    # Calculate the sum of the products
-                    output_value = np.sum(element_wise_product)
-                    # print(f"Kernel: {k}, i: {i}, j: {j}, z: {z}")
-                    output_tensor[i, j, z, k] = output_value
+    # 创建热图的数据源
+    x, y = np.arange(cols), np.arange(rows)
+    xx, yy = np.meshgrid(x, y)
+    source_data = {"x": xx.ravel(), "y": yy.ravel(), "values": data.ravel()}
 
-    output_tensor += bias  # Add the bias to all elements of the output tensor
+    if additional_info is not None:
+        for i, info in enumerate(additional_info):
+            source_data[f"additional_info_{i+1}"] = info.ravel()
 
-    return output_tensor
+    source = ColumnDataSource(data=source_data)
 
+    # 创建主要的热图绘图
+    p = figure(width=600, height=600, tools=[WheelZoomTool(), PanTool()], title=title)
+    p.x_range.range_padding = p.y_range.range_padding = 0
+    rect = p.rect(x="x", y="y", width=1, height=1, source=source, fill_color=mapper, line_color=None)
 
+    # 添加用于工具提示的HoverTool
+    tooltips = [("数值", "@values"), ("X位置", "@x"), ("Y位置", "@y")]
 
-def save_tensor_to_bin(tensor, filename_prefix):
-    # 获取张量的形状
-    shape_str = "x".join(map(str, tensor.shape))
+    if additional_info is not None:
+        for i in range(len(additional_info)):
+            tooltips.append((f"额外信息 {i+1}", f"@additional_info_{i+1}"))
 
-    # 构建文件名
-    filename = f"{filename_prefix}_{shape_str}.bin"
+    hover = HoverTool(tooltips=tooltips, renderers=[rect])
+    p.add_tools(hover)
 
-    # 保存张量为 .bin 文件
-    tensor.tofile(filename)
+    # 创建简化的图例
+    color_mapper = LinearColorMapper(palette=RdBu[9], low=low, high=high)
+    color_bar = ColorBar(color_mapper=color_mapper, location=(0, 0))
+    p.add_layout(color_bar, 'below')
 
+    # 显示布局
+    show(p)
 
-def main():
-    input_tensor = np.array([[[1, 2, 3, 4],
-                              [5, 6, 7, 8],
-                              [9, 10, 11, 12],
-                              [13, 14, 15, 16]],
-                             [[17, 18, 19, 20],
-                              [21, 22, 23, 24],
-                              [25, 26, 27, 28],
-                              [29, 30, 31, 32]],
-                             [[33, 34, 35, 36],
-                              [37, 38, 39, 40],
-                              [41, 42, 43, 44],
-                              [45, 46, 47, 48]]])
+# 示例用法：
+# 创建一个随机的 5x5 二维张量用于演示
+data = np.random.uniform(-12, 12, size=(15, 25))
 
-    # 原始3D卷积核
-    # 创建一个4D卷积核，第一维度为2，其它三个维度为3x3x2
-    kernel_tensor = np.ones((2, 3, 3, 2))  # 使用np.ones赋予初始值为1
+# 假设有两个矩阵 additional_info1 和 additional_info2 与 data 具有相同的尺寸
+additional_info1 = np.random.rand(15, 25)
+additional_info2 = np.random.rand(15, 25)
 
-    bias_tensor = np.array([[[2]]])
-
-    output = convolution_3d(input_tensor, kernel_tensor, bias_tensor)
-    print("输出张量:")
-    print(output)
-
-
-    # 保存张量到文件
-    save_tensor_to_bin(input_tensor, "input_tensor")
-    save_tensor_to_bin(kernel_tensor, "kernel_tensor")
-    save_tensor_to_bin(bias_tensor, "bias_tensor")
-    save_tensor_to_bin(output, "output_tensor")
-
-if __name__ == "__main__":
-    main()
+create_heatmap_with_legend(data, title="Custom Heatmap", additional_info=[additional_info1, additional_info2])
